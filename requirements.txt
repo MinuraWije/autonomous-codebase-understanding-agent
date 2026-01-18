@@ -1,0 +1,38 @@
+# Core
+langchain>=0.3.0
+langgraph>=0.2.40
+langchain-community>=0.2.0
+huggingface-hub>=0.20.0
+
+# Embeddings & Vector DB
+sentence-transformers==2.7.0
+chromadb==0.4.24
+torch>=2.0.0
+
+# Code Processing
+tree-sitter>=0.21.1
+tree-sitter-python>=0.21.0
+tree-sitter-javascript>=0.21.0
+tree-sitter-java>=0.21.0
+tree-sitter-go>=0.21.0
+gitpython==3.1.40
+
+# API & UI
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+streamlit==1.29.0
+pydantic>=2.7.4,<3.0.0
+pydantic-settings>=2.0.0
+python-dotenv==1.0.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Utils
+aiofiles==23.2.1
+python-multipart==0.0.6
+# tiktoken is optional - has fallback for token counting
+# For Python 3.13, you can install with: PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 pip install tiktoken
+# tiktoken>=0.8.0
+requests>=2.31.0

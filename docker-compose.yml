@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: codebase-agent-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./app:/app/app
+      - ./agent:/app/agent
+      - ./indexing:/app/indexing
+      - ./tools:/app/tools
+    env_file:
+      - .env
+    environment:
+      - DATA_DIR=/app/data
+      - REPOS_DIR=/app/data/repos
+      - CHROMA_DB_DIR=/app/data/chroma_db
+      - METADATA_DB_PATH=/app/data/metadata.db
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - codebase-agent-network
+  
+  ui:
+    build: .
+    container_name: codebase-agent-ui
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./ui:/app/ui
+    depends_on:
+      - api
+    environment:
+      - API_URL=http://api:8000/api/v1
+    command: streamlit run ui/streamlit_app.py --server.address 0.0.0.0
+    networks:
+      - codebase-agent-network
+
+networks:
+  codebase-agent-network:
+    driver: bridge

@@ -1,0 +1,38 @@
+[
+  {
+    "repo": "fastapi",
+    "question": "Where is request validation implemented?",
+    "type": "location",
+    "expected_files": ["pydantic", "dependencies"]
+  },
+  {
+    "repo": "fastapi",
+    "question": "How does dependency injection work?",
+    "type": "flow",
+    "expected_files": ["dependencies"]
+  },
+  {
+    "repo": "flask",
+    "question": "Where is the routing mechanism defined?",
+    "type": "location",
+    "expected_files": ["app.py", "routing"]
+  },
+  {
+    "repo": "flask",
+    "question": "How are request contexts handled?",
+    "type": "flow",
+    "expected_files": ["ctx", "context"]
+  },
+  {
+    "repo": "requests",
+    "question": "Where is authentication handled?",
+    "type": "location",
+    "expected_files": ["auth"]
+  },
+  {
+    "repo": "requests",
+    "question": "How does session management work?",
+    "type": "flow",
+    "expected_files": ["sessions"]
+  }
+]
