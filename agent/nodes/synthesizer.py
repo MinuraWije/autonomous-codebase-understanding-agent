@@ -1,8 +1,9 @@
 """Synthesizer node for the agent."""
-from agent.llm_wrapper import HuggingFaceChatLLM
 from agent.state import AgentState
 from agent.prompts import get_synthesizer_prompt, extract_citations
-from app.config import settings
+from core.llm_service import LLMServiceFactory
+from core.citation_service import CitationService
+from core.error_handler import safe_execute
 
 
 def synthesizer_node(state: AgentState) -> AgentState:
@@ -15,12 +16,6 @@ def synthesizer_node(state: AgentState) -> AgentState:
     Returns:
         Updated state with draft answer and citations
     """
-    llm = HuggingFaceChatLLM(
-        model=settings.synthesizer_model,
-        huggingface_api_key=settings.huggingface_api_key,
-        temperature=0
-    )
-    
     chunks = state['retrieved_chunks']
     
     if not chunks:
@@ -30,19 +25,17 @@ def synthesizer_node(state: AgentState) -> AgentState:
             'citations': []
         }
     
+    llm_service = LLMServiceFactory.create_synthesizer_service()
+    citation_service = CitationService()
     prompt = get_synthesizer_prompt(state['question'], chunks)
     
-    try:
-        response = llm.invoke(prompt)
-        draft_answer = response.content
-        
-        # Extract citations
-        citations = extract_citations(draft_answer)
-        
-    except Exception as e:
-        print(f"Synthesizer error: {e}")
-        draft_answer = f"Error generating answer: {e}"
-        citations = []
+    draft_answer = safe_execute(
+        lambda: llm_service.invoke_text(prompt),
+        default_return="Error generating answer"
+    )
+    
+    # Extract citations
+    citations = citation_service.extract_citations_from_answer(draft_answer)
     
     reasoning_trace = state.get('reasoning_trace', [])
     reasoning_trace.append(f"Generated answer with {len(citations)} citations")

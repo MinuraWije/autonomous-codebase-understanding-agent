@@ -3,6 +3,7 @@ import re
 from typing import List, Dict, Optional
 from indexing.vector_store import get_vector_store
 from indexing.metadata_store import get_metadata_store
+from core.constants import STOP_WORDS, VECTOR_SEARCH_WEIGHT, LEXICAL_SEARCH_WEIGHT, RANK_BOOST_FACTOR, OVERLAP_THRESHOLD
 
 
 def vector_search(question: str, repo_id: str, k: int = 10) -> List[Dict]:
@@ -47,18 +48,11 @@ def extract_keywords(question: str) -> List[str]:
     Returns:
         List of keywords
     """
-    # Remove common question words
-    stop_words = {
-        'how', 'what', 'where', 'when', 'why', 'who', 'which', 'is', 'are', 'the',
-        'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from',
-        'does', 'do', 'did', 'can', 'could', 'would', 'should', 'will', 'be'
-    }
-    
     # Extract words
     words = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', question.lower())
     
     # Filter and return
-    keywords = [w for w in words if w not in stop_words and len(w) > 2]
+    keywords = [w for w in words if w not in STOP_WORDS and len(w) > 2]
     
     # Also look for camelCase or PascalCase words in original question
     camel_words = re.findall(r'\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b', question)
@@ -122,10 +116,10 @@ def merge_and_rerank(
     # Add vector results with weight
     for i, result in enumerate(vector_results):
         chunk_id = result['chunk_id']
-        score = result.get('score', 0.5)
+        score = result.get('score', 0.5) * VECTOR_SEARCH_WEIGHT
         
         # Boost score based on rank
-        rank_boost = (len(vector_results) - i) / len(vector_results) * 0.3
+        rank_boost = (len(vector_results) - i) / len(vector_results) * RANK_BOOST_FACTOR
         
         chunk_map[chunk_id] = {
             **result,
@@ -139,10 +133,10 @@ def merge_and_rerank(
         score = result.get('score', 0.3)
         
         # Normalize lexical score (it's typically much higher)
-        normalized_score = min(score / 10.0, 1.0)
+        normalized_score = min(score / 10.0, 1.0) * LEXICAL_SEARCH_WEIGHT
         
         # Boost score based on rank
-        rank_boost = (len(lexical_results) - i) / len(lexical_results) * 0.2
+        rank_boost = (len(lexical_results) - i) / len(lexical_results) * (RANK_BOOST_FACTOR * 0.67)
         
         if chunk_id in chunk_map:
             # Chunk found in both - boost its score significantly
@@ -194,13 +188,13 @@ def deduplicate_by_file_span(results: List[Dict], max_chunks: int = 12) -> List[
         
         overlaps = False
         for existing_start, existing_end, existing_idx in file_spans[file_path]:
-            # Check if spans overlap significantly (>50%)
+            # Check if spans overlap significantly
             overlap_start = max(start, existing_start)
             overlap_end = min(end, existing_end)
             overlap_size = max(0, overlap_end - overlap_start)
             
             span_size = end - start
-            if span_size > 0 and overlap_size / span_size > 0.5:
+            if span_size > 0 and overlap_size / span_size > OVERLAP_THRESHOLD:
                 overlaps = True
                 break
         

@@ -7,6 +7,7 @@ from agent.nodes.synthesizer import synthesizer_node
 from agent.nodes.verifier import verifier_node
 from agent.nodes.finalizer import finalizer_node
 from app.config import settings
+from core.constants import DEFAULT_MAX_RETRIEVAL_ITERATIONS
 
 
 def should_retrieve_more(state: AgentState) -> str:
@@ -21,10 +22,11 @@ def should_retrieve_more(state: AgentState) -> str:
     """
     verification = state.get('verification_result', {})
     iteration = state.get('retrieval_iteration', 0)
+    max_iterations = getattr(settings, 'max_retrieval_iterations', DEFAULT_MAX_RETRIEVAL_ITERATIONS)
     
     # Check if verification failed and we haven't exceeded max iterations
     if not verification.get('is_grounded', True):
-        if iteration < settings.max_retrieval_iterations:
+        if iteration < max_iterations:
             # Check if verifier provided follow-up queries
             if verification.get('follow_up_queries'):
                 return "retrieve_more"

@@ -1,6 +1,6 @@
 """Finalizer node for the agent."""
 from agent.state import AgentState
-from tools.file_tools import open_span
+from core.citation_service import CitationService
 
 
 def finalizer_node(state: AgentState) -> AgentState:
@@ -16,40 +16,19 @@ def finalizer_node(state: AgentState) -> AgentState:
     draft_answer = state.get('draft_answer', '')
     citations = state.get('citations', [])
     
+    citation_service = CitationService()
+    
     # Enhance citations with actual text snippets
-    enhanced_citations = []
-    for citation in citations:
-        try:
-            # Try to get the actual code snippet
-            snippet = open_span(
-                state['repo_id'],
-                citation['file_path'],
-                citation['start_line'],
-                citation['end_line']
-            )
-            
-            # Limit snippet length
-            if len(snippet) > 300:
-                snippet = snippet[:300] + "..."
-            
-            enhanced_citations.append({
-                **citation,
-                'text_snippet': snippet
-            })
-        except Exception:
-            # If we can't get the snippet, keep the citation without it
-            enhanced_citations.append({
-                **citation,
-                'text_snippet': '[Code snippet unavailable]'
-            })
+    enhanced_citations = citation_service.enhance_citations(
+        citations,
+        state['repo_id']
+    )
     
     # Format final answer with citation summary
-    final_answer = draft_answer
-    
-    if enhanced_citations:
-        final_answer += "\n\n### References:\n"
-        for i, citation in enumerate(enhanced_citations, 1):
-            final_answer += f"\n{i}. `{citation['file_path']}` (lines {citation['start_line']}-{citation['end_line']})"
+    reference_section = citation_service.format_citations_for_answer(
+        enhanced_citations
+    )
+    final_answer = draft_answer + reference_section
     
     reasoning_trace = state.get('reasoning_trace', [])
     reasoning_trace.append("Finalized answer with enhanced citations")

@@ -1,6 +1,7 @@
 """Repository inspection tools."""
 from typing import List, Dict
 from indexing.metadata_store import get_metadata_store
+from core.constants import KEY_FILE_PATTERNS
 
 
 def get_repo_summary(repo_id: str) -> Dict:
@@ -57,18 +58,11 @@ def get_key_files(repo_id: str, top_n: int = 10) -> List[str]:
     if not repo:
         raise ValueError(f"Repository not found: {repo_id}")
     
-    # Common entry point files
-    key_patterns = [
-        'main.py', 'app.py', '__init__.py', 'index.js', 'index.ts',
-        'server.py', 'server.js', 'api.py', 'routes.py', 'views.py',
-        'Main.java', 'Application.java', 'main.go', 'README.md'
-    ]
-    
     from pathlib import Path
     repo_path = Path(repo['local_path'])
     
     key_files = []
-    for pattern in key_patterns:
+    for pattern in KEY_FILE_PATTERNS:
         matches = list(repo_path.rglob(pattern))
         for match in matches[:2]:  # Limit per pattern
             try:

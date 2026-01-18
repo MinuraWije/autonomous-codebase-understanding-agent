@@ -2,6 +2,7 @@
 from pathlib import Path
 from typing import Optional, List
 from indexing.metadata_store import get_metadata_store
+from core.constants import IGNORED_PATTERNS
 
 
 def open_file(repo_id: str, file_path: str) -> str:
@@ -125,7 +126,7 @@ def get_file_structure(repo_id: str, max_depth: int = 3) -> dict:
         try:
             for item in sorted(path.iterdir()):
                 # Skip hidden files and common ignore patterns
-                if item.name.startswith('.') or item.name in ['node_modules', '__pycache__', 'venv']:
+                if item.name.startswith('.') or item.name in IGNORED_PATTERNS:
                     continue
                 
                 if item.is_dir():
