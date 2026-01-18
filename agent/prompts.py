@@ -62,8 +62,14 @@ CRITICAL RULES:
 3. If information is not in the chunks, say "Not found in retrieved code"
 4. Be specific about file paths and line numbers
 5. Do not make assumptions about code you haven't seen
+6. You MUST include citations for every code snippet or claim you make
 
-Example citation format: [src/auth/middleware.py:45-67]
+Example citation formats:
+- [src/auth/middleware.py:45-67] (preferred)
+- [src/auth/middleware.py:45] (single line)
+- Always cite immediately after mentioning code or making a claim
+
+IMPORTANT: If you reference code from the chunks above, you MUST cite it using the exact file path and line numbers shown in the chunk headers (e.g., "Chunk 1: file_path:start_line-end_line").
 
 Answer:"""
 
@@ -138,19 +144,79 @@ def extract_json_from_response(response: str) -> dict:
 
 
 def extract_citations(answer_text: str) -> list:
-    """Extract citations from answer text."""
+    """
+    Extract citations from answer text.
+    
+    Supports multiple citation formats:
+    - [file_path:start_line-end_line] (standard format)
+    - [file_path:line] (single line)
+    - (file_path:start_line-end_line) (parentheses format)
+    - file_path:start_line-end_line (no brackets, with file extension)
+    """
     import re
     
-    pattern = r'\[([^\]]+):(\d+)-(\d+)\]'
-    matches = re.findall(pattern, answer_text)
-    
     citations = []
-    for file_path, start_line, end_line in matches:
-        citations.append({
-            'file_path': file_path,
-            'start_line': int(start_line),
-            'end_line': int(end_line),
-            'text_snippet': ''  # Will be filled later if needed
-        })
+    seen_keys = set()
+    
+    # Pattern 1: [file_path:start_line-end_line] or [file_path:line]
+    _extract_with_pattern(
+        answer_text,
+        r'\[([^\]]+?):(\d+)(?:-(\d+))?\]',
+        citations,
+        seen_keys
+    )
+    
+    # Pattern 2: (file_path:start_line-end_line) or (file_path:line)
+    _extract_with_pattern(
+        answer_text,
+        r'\(([^)]+?):(\d+)(?:-(\d+))?\)',
+        citations,
+        seen_keys
+    )
+    
+    # Pattern 3: file_path:start_line-end_line (no brackets, requires file extension)
+    # Simplified pattern to reduce complexity
+    file_extensions = r'py|js|ts|java|go|rs|cpp|c|h|tsx|jsx|md|txt'
+    pattern3 = rf'([a-zA-Z0-9_/\\\.-]+\.(?:{file_extensions})):(\d+)(?:-(\d+))?(?=\s|$|,|\.|;|\))'
+    _extract_with_pattern(
+        answer_text,
+        pattern3,
+        citations,
+        seen_keys
+    )
     
     return citations
+
+
+def _extract_with_pattern(
+    text: str,
+    pattern: str,
+    citations: list,
+    seen_keys: set
+) -> None:
+    """
+    Extract citations using a regex pattern and add to citations list.
+    
+    Args:
+        text: Text to search
+        pattern: Regex pattern with groups (file_path, start_line, optional end_line)
+        citations: List to append citations to
+        seen_keys: Set of (file_path, start_line) tuples to avoid duplicates
+    """
+    import re
+    
+    matches = re.findall(pattern, text)
+    for match in matches:
+        file_path = match[0].strip()
+        start_line = int(match[1])
+        end_line = int(match[2]) if len(match) > 2 and match[2] else start_line
+        
+        key = (file_path, start_line)
+        if key not in seen_keys:
+            seen_keys.add(key)
+            citations.append({
+                'file_path': file_path,
+                'start_line': start_line,
+                'end_line': end_line,
+                'text_snippet': ''
+            })

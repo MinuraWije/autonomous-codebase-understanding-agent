@@ -34,8 +34,11 @@ def synthesizer_node(state: AgentState) -> AgentState:
         default_return="Error generating answer"
     )
     
-    # Extract citations
-    citations = citation_service.extract_citations_from_answer(draft_answer)
+    # Extract citations with fallback to context-based extraction
+    citations = citation_service.extract_citations_from_answer(
+        draft_answer,
+        retrieved_chunks=chunks
+    )
     
     reasoning_trace = state.get('reasoning_trace', [])
     reasoning_trace.append(f"Generated answer with {len(citations)} citations")
