@@ -21,6 +21,24 @@ LEXICAL_SEARCH_WEIGHT = 0.3
 RANK_BOOST_FACTOR = 0.3
 OVERLAP_THRESHOLD = 0.5
 
+# Reranking configuration
+MULTI_TERM_MATCH_BOOST = 0.15  # Boost per additional matching keyword
+TEST_FILE_PENALTY = -0.2  # Penalty for test files when searching implementation
+DOC_FILE_PENALTY = -0.15  # Penalty for documentation files when searching implementation
+PATH_DEPTH_BOOST = 0.05  # Boost per level closer to root (max 3 levels)
+
+# Test file patterns
+TEST_FILE_PATTERNS: List[str] = [
+    'test_', '_test', 'spec_', '_spec', '.test.', '.spec.',
+    'tests/', 'test/', '__tests__/', 'specs/', 'spec/'
+]
+
+# Documentation file patterns
+DOC_FILE_PATTERNS: List[str] = [
+    'readme', 'changelog', 'license', 'contributing', 'docs/',
+    'documentation/', '.md', '.txt', '.rst'
+]
+
 # Key file patterns for repository analysis
 KEY_FILE_PATTERNS: List[str] = [
     'main.py', 'app.py', '__init__.py', 'index.js', 'index.ts',

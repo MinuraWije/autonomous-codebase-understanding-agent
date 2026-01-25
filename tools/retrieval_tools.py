@@ -9,7 +9,13 @@ from core.constants import (
     LEXICAL_SEARCH_WEIGHT, 
     RANK_BOOST_FACTOR, 
     OVERLAP_THRESHOLD,
-    QUERY_EXPANSIONS
+    QUERY_EXPANSIONS,
+    MULTI_TERM_MATCH_BOOST,
+    TEST_FILE_PENALTY,
+    DOC_FILE_PENALTY,
+    PATH_DEPTH_BOOST,
+    TEST_FILE_PATTERNS,
+    DOC_FILE_PATTERNS
 )
 
 
@@ -190,24 +196,89 @@ def hybrid_search(question: str, repo_id: str, k: int = 12) -> List[Dict]:
         results = lexical_search(keyword, repo_id, k=k//2)
         lexical_results.extend(results)
     
-    # Merge and deduplicate
-    merged = merge_and_rerank(vector_results, lexical_results, k=k)
+    # Extract base keywords (non-expanded) for multi-term matching
+    base_keywords = extract_keywords(question, expand=False)
+    
+    # Merge and deduplicate with reranking
+    merged = merge_and_rerank(
+        vector_results, 
+        lexical_results, 
+        k=k,
+        query_keywords=base_keywords,
+        original_question=question
+    )
     
     return merged
+
+
+def _is_test_file(file_path: str) -> bool:
+    """Check if file is a test file."""
+    file_path_lower = file_path.lower()
+    return any(pattern in file_path_lower for pattern in TEST_FILE_PATTERNS)
+
+
+def _is_doc_file(file_path: str) -> bool:
+    """Check if file is a documentation file."""
+    file_path_lower = file_path.lower()
+    return any(pattern in file_path_lower for pattern in DOC_FILE_PATTERNS)
+
+
+def _calculate_path_depth(file_path: str) -> int:
+    """
+    Calculate path depth (number of directory separators).
+    Root level files have depth 0.
+    """
+    # Normalize path separators
+    normalized = file_path.replace('\\', '/')
+    # Count separators, excluding leading/trailing
+    parts = [p for p in normalized.split('/') if p]
+    return max(0, len(parts) - 1)  # Subtract 1 for filename
+
+
+def _count_keyword_matches(chunk_text: str, keywords: List[str]) -> int:
+    """
+    Count how many keywords appear in the chunk text.
+    
+    Args:
+        chunk_text: Text content of the chunk
+        keywords: List of keywords to search for
+    
+    Returns:
+        Number of unique keywords found
+    """
+    if not keywords or not chunk_text:
+        return 0
+    
+    chunk_lower = chunk_text.lower()
+    matches = 0
+    
+    for keyword in keywords:
+        # Check for whole word matches
+        keyword_lower = keyword.lower()
+        # Use word boundaries to avoid partial matches
+        pattern = r'\b' + re.escape(keyword_lower) + r'\b'
+        if re.search(pattern, chunk_lower):
+            matches += 1
+    
+    return matches
 
 
 def merge_and_rerank(
     vector_results: List[Dict],
     lexical_results: List[Dict],
-    k: int = 12
+    k: int = 12,
+    query_keywords: Optional[List[str]] = None,
+    original_question: Optional[str] = None
 ) -> List[Dict]:
     """
-    Merge vector and lexical search results, deduplicate, and rerank.
+    Merge vector and lexical search results, deduplicate, and rerank with advanced scoring.
     
     Args:
         vector_results: Results from vector search
         lexical_results: Results from lexical search
         k: Number of results to return
+        query_keywords: Base keywords from query (for multi-term matching)
+        original_question: Original question text (for context)
     
     Returns:
         Merged and ranked results
@@ -251,8 +322,44 @@ def merge_and_rerank(
                 'sources': ['lexical']
             }
     
-    # Sort by combined score
+    # Apply advanced reranking factors
     results = list(chunk_map.values())
+    
+    for result in results:
+        file_path = result.get('file_path', result.get('metadata', {}).get('file_path', ''))
+        chunk_text = result.get('text', result.get('chunk_text', ''))
+        
+        # Multi-term matching boost
+        if query_keywords and len(query_keywords) > 1:
+            matches = _count_keyword_matches(chunk_text, query_keywords)
+            if matches > 1:
+                # Boost for each additional keyword match beyond the first
+                additional_matches = matches - 1
+                result['combined_score'] += additional_matches * MULTI_TERM_MATCH_BOOST
+        
+        # File type penalties (only apply if we have keywords suggesting implementation search)
+        if query_keywords and file_path:
+            # Check if question seems to be about implementation (not testing)
+            is_implementation_query = (
+                original_question and 
+                not any(word in original_question.lower() for word in ['test', 'spec', 'example', 'sample'])
+            )
+            
+            if is_implementation_query:
+                if _is_test_file(file_path):
+                    result['combined_score'] += TEST_FILE_PENALTY
+                elif _is_doc_file(file_path):
+                    result['combined_score'] += DOC_FILE_PENALTY
+        
+        # Path depth boost (prefer files closer to root, up to 3 levels)
+        if file_path:
+            depth = _calculate_path_depth(file_path)
+            if depth <= 3:
+                # Boost for shallower files (depth 0 gets max boost, depth 3 gets min)
+                depth_boost = (3 - depth) * PATH_DEPTH_BOOST
+                result['combined_score'] += depth_boost
+    
+    # Sort by combined score
     results.sort(key=lambda x: x['combined_score'], reverse=True)
     
     # Deduplicate by file span (keep highest scoring if overlapping)
