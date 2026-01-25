@@ -7,6 +7,7 @@ DEFAULT_MAX_CHUNKS_PER_QUERY = 12
 DEFAULT_CHUNK_SIZE = 1200
 DEFAULT_CHUNK_OVERLAP = 200
 DEFAULT_MAX_CITATIONS = 15
+DEFAULT_QUERY_VARIATIONS = 3  # Number of query variations for multi-query retrieval
 DEFAULT_SNIPPET_LENGTH = 300
 MIN_CHUNK_SIZE_TOKENS = 50  # Minimum tokens before merging small chunks
 MAX_CONTEXT_LINES = 10  # Maximum lines to look back for comments/docstrings

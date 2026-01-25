@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     reserve_prompt_tokens: int = 2000  # Tokens reserved for prompt template
     reserve_response_tokens: int = 1000  # Tokens reserved for LLM response
     
+    # Multi-query retrieval
+    query_variations: int = 3  # Number of query variations per base query (3-5 recommended)
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Create data directories if they don't exist
