@@ -8,6 +8,8 @@ DEFAULT_CHUNK_SIZE = 1200
 DEFAULT_CHUNK_OVERLAP = 200
 DEFAULT_MAX_CITATIONS = 15
 DEFAULT_SNIPPET_LENGTH = 300
+MIN_CHUNK_SIZE_TOKENS = 50  # Minimum tokens before merging small chunks
+MAX_CONTEXT_LINES = 10  # Maximum lines to look back for comments/docstrings
 
 # LLM temperature settings
 PLANNER_TEMPERATURE = 0.0

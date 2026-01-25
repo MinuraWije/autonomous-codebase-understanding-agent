@@ -1,6 +1,11 @@
 """Repository loading and file filtering."""
 import os
+import sys
+import stat
+import shutil
 import hashlib
+import time
+import uuid
 from pathlib import Path
 from typing import List, Dict, Optional
 from dataclasses import dataclass
@@ -57,6 +62,103 @@ def generate_repo_id(url_or_path: str) -> str:
     return hashlib.md5(url_or_path.encode()).hexdigest()[:12]
 
 
+def _unlock_git_files(git_dir: Path) -> None:
+    """Unlock .git files on Windows by changing their attributes."""
+    if sys.platform != 'win32':
+        return
+    
+    try:
+        for root, dirs, files in os.walk(git_dir):
+            for d in dirs:
+                try:
+                    os.chmod(os.path.join(root, d), stat.S_IWRITE)
+                except Exception:
+                    pass
+            for f in files:
+                try:
+                    os.chmod(os.path.join(root, f), stat.S_IWRITE)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+def _remove_directory_robust(target_dir: Path, max_retries: int = 3) -> None:
+    """
+    Remove a directory with robust error handling for Windows file locks.
+    
+    Args:
+        target_dir: Directory to remove
+        max_retries: Maximum number of retry attempts
+    """
+    if not target_dir.exists():
+        return
+    
+    # Try standard deletion first
+    for attempt in range(max_retries):
+        try:
+            shutil.rmtree(target_dir)
+            return
+        except PermissionError:
+            if attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            
+            # Last attempt: handle Windows .git locks
+            _handle_windows_git_lock(target_dir)
+            return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            
+            # Last attempt: try with ignore_errors
+            print(f"Warning: Error removing {target_dir}: {e}")
+            shutil.rmtree(target_dir, ignore_errors=True)
+            return
+
+
+def _handle_windows_git_lock(target_dir: Path) -> None:
+    """Handle Windows file locks in .git directory."""
+    git_dir = target_dir / '.git'
+    
+    if git_dir.exists():
+        # Unlock files on Windows
+        _unlock_git_files(git_dir)
+        # Try to remove .git separately
+        shutil.rmtree(git_dir, ignore_errors=True)
+    
+    # Try to remove the rest
+    shutil.rmtree(target_dir, ignore_errors=True)
+    
+    # If still exists, rename it to move it out of the way
+    if target_dir.exists():
+        try:
+            old_dir = target_dir.parent / f"{target_dir.name}.old.{uuid.uuid4().hex[:8]}"
+            target_dir.rename(old_dir)
+            # Try to delete renamed directory
+            shutil.rmtree(old_dir, ignore_errors=True)
+        except Exception:
+            # If rename fails, try to clean up non-.git files
+            _cleanup_non_git_files(target_dir)
+
+
+def _cleanup_non_git_files(target_dir: Path) -> None:
+    """Remove non-.git files from directory when .git is locked."""
+    try:
+        for item in target_dir.iterdir():
+            if item.name != '.git':
+                try:
+                    if item.is_dir():
+                        shutil.rmtree(item, ignore_errors=True)
+                    else:
+                        item.unlink()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
 def clone_repo(github_url: str, branch: str = "main") -> RepoMetadata:
     """
     Clone a GitHub repository.
@@ -71,10 +173,9 @@ def clone_repo(github_url: str, branch: str = "main") -> RepoMetadata:
     repo_id = generate_repo_id(github_url)
     target_dir = settings.repos_dir / repo_id
     
-    # Remove existing directory if it exists
+    # Remove existing directory if it exists (with robust error handling)
     if target_dir.exists():
-        import shutil
-        shutil.rmtree(target_dir)
+        _remove_directory_robust(target_dir)
     
     # Clone the repository
     repo = Repo.clone_from(github_url, target_dir, branch=branch, depth=1)
