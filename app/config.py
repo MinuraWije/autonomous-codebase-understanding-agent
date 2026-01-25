@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     chunk_size: int = 1200
     chunk_overlap: int = 200
     
+    # Context window optimization
+    context_window_size: int = 8192  # Maximum context window size in tokens
+    reserve_prompt_tokens: int = 2000  # Tokens reserved for prompt template
+    reserve_response_tokens: int = 1000  # Tokens reserved for LLM response
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Create data directories if they don't exist

@@ -11,6 +11,12 @@ DEFAULT_SNIPPET_LENGTH = 300
 MIN_CHUNK_SIZE_TOKENS = 50  # Minimum tokens before merging small chunks
 MAX_CONTEXT_LINES = 10  # Maximum lines to look back for comments/docstrings
 
+# Context window optimization
+DEFAULT_CONTEXT_WINDOW = 8192  # Default context window size in tokens (conservative for Llama 3.2 3B)
+RESERVE_TOKENS_FOR_PROMPT = 2000  # Reserve tokens for prompt template
+RESERVE_TOKENS_FOR_RESPONSE = 1000  # Reserve tokens for LLM response
+MIN_CHUNK_TOKENS_AFTER_TRUNCATION = 200  # Minimum tokens to keep per chunk after truncation
+
 # LLM temperature settings
 PLANNER_TEMPERATURE = 0.0
 SYNTHESIZER_TEMPERATURE = 0.0
