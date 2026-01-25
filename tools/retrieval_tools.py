@@ -3,23 +3,66 @@ import re
 from typing import List, Dict, Optional
 from indexing.vector_store import get_vector_store
 from indexing.metadata_store import get_metadata_store
-from core.constants import STOP_WORDS, VECTOR_SEARCH_WEIGHT, LEXICAL_SEARCH_WEIGHT, RANK_BOOST_FACTOR, OVERLAP_THRESHOLD
+from core.constants import (
+    STOP_WORDS, 
+    VECTOR_SEARCH_WEIGHT, 
+    LEXICAL_SEARCH_WEIGHT, 
+    RANK_BOOST_FACTOR, 
+    OVERLAP_THRESHOLD,
+    QUERY_EXPANSIONS
+)
 
 
-def vector_search(question: str, repo_id: str, k: int = 10) -> List[Dict]:
+def expand_query_for_vector_search(question: str) -> str:
     """
-    Perform semantic vector search.
+    Expand query with synonyms for better vector search.
+    Adds related terms to help semantic search find more relevant results.
+    
+    Args:
+        question: Original question
+    
+    Returns:
+        Expanded query string
+    """
+    # Extract base keywords
+    keywords = extract_keywords(question, expand=False)
+    
+    if not keywords:
+        return question
+    
+    # Get expansions for top keywords
+    expanded_terms = expand_query_terms(keywords[:3])  # Expand top 3 keywords
+    
+    # Build expanded query: original + key expansions
+    expanded_parts = [question]
+    
+    # Add most relevant expansions (limit to avoid query bloat)
+    for term in expanded_terms[:5]:
+        if term not in question.lower():
+            expanded_parts.append(term)
+    
+    return ' '.join(expanded_parts[:3])  # Limit to 3 parts to keep query focused
+
+
+def vector_search(question: str, repo_id: str, k: int = 10, use_expansion: bool = True) -> List[Dict]:
+    """
+    Perform semantic vector search with optional query expansion.
     
     Args:
         question: Search query
         repo_id: Repository ID
         k: Number of results
+        use_expansion: Whether to expand query with synonyms
     
     Returns:
         List of matching chunks
     """
     vector_store = get_vector_store()
-    return vector_store.search(question, repo_id, n_results=k)
+    
+    # Use expanded query for better semantic matching
+    search_query = expand_query_for_vector_search(question) if use_expansion else question
+    
+    return vector_store.search(search_query, repo_id, n_results=k)
 
 
 def lexical_search(keyword: str, repo_id: str, k: int = 10) -> List[Dict]:
@@ -38,36 +81,93 @@ def lexical_search(keyword: str, repo_id: str, k: int = 10) -> List[Dict]:
     return metadata_store.search_chunks_lexical(repo_id, keyword, limit=k)
 
 
-def extract_keywords(question: str) -> List[str]:
+def expand_query_terms(terms: List[str]) -> List[str]:
     """
-    Extract likely keywords from a question.
+    Expand query terms with synonyms and related terms.
+    
+    Args:
+        terms: List of base terms
+    
+    Returns:
+        Expanded list of terms including synonyms
+    """
+    expanded = set(terms)
+    
+    for term in terms:
+        term_lower = term.lower()
+        # Check for exact match in expansions
+        if term_lower in QUERY_EXPANSIONS:
+            expanded.update(QUERY_EXPANSIONS[term_lower])
+        # Check for partial matches (e.g., "auth" in "authentication")
+        else:
+            for key, synonyms in QUERY_EXPANSIONS.items():
+                if key in term_lower or term_lower in key:
+                    expanded.update(synonyms)
+                    expanded.add(key)
+    
+    return list(expanded)
+
+
+def extract_keywords(question: str, expand: bool = True) -> List[str]:
+    """
+    Extract likely keywords from a question with optional expansion.
+    Extracts technical terms, function names, class names, and common keywords.
     
     Args:
         question: Question text
+        expand: Whether to expand terms with synonyms
     
     Returns:
-        List of keywords
+        List of keywords (expanded if requested)
     """
-    # Extract words
+    # Extract basic words
     words = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', question.lower())
     
-    # Filter and return
+    # Filter stop words and short words
     keywords = [w for w in words if w not in STOP_WORDS and len(w) > 2]
     
-    # Also look for camelCase or PascalCase words in original question
+    # Extract camelCase or PascalCase (likely function/class names)
     camel_words = re.findall(r'\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b', question)
-    keywords.extend([w.lower() for w in camel_words])
+    # Split camelCase into components (e.g., "getUserData" -> ["get", "user", "data"])
+    for camel_word in camel_words:
+        # Split camelCase
+        split_words = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', camel_word)
+        keywords.extend([w.lower() for w in split_words if len(w) > 2])
+        keywords.append(camel_word.lower())  # Also keep the full word
     
-    # Look for snake_case
+    # Extract snake_case (likely variable/function names)
     snake_words = re.findall(r'\b[a-z]+_[a-z_]+\b', question)
-    keywords.extend(snake_words)
+    # Split snake_case into components
+    for snake_word in snake_words:
+        parts = snake_word.split('_')
+        keywords.extend([p for p in parts if len(p) > 2])
+        keywords.append(snake_word)  # Also keep the full word
     
-    return list(set(keywords))[:5]  # Return top 5 unique keywords
+    # Extract technical patterns (e.g., "API", "HTTP", "JSON", "SQL")
+    tech_patterns = re.findall(r'\b[A-Z]{2,}\b', question)
+    keywords.extend([p.lower() for p in tech_patterns])
+    
+    # Remove duplicates while preserving order
+    unique_keywords = []
+    seen = set()
+    for kw in keywords:
+        if kw not in seen:
+            unique_keywords.append(kw)
+            seen.add(kw)
+    
+    # Expand with synonyms if requested
+    if expand and unique_keywords:
+        expanded = expand_query_terms(unique_keywords)
+        # Prioritize original keywords, then add expansions
+        result = unique_keywords + [e for e in expanded if e not in seen]
+        return result[:8]  # Return top 8 (increased from 5 to accommodate expansions)
+    
+    return unique_keywords[:5]  # Return top 5 if not expanding
 
 
 def hybrid_search(question: str, repo_id: str, k: int = 12) -> List[Dict]:
     """
-    Perform hybrid search combining vector and lexical search.
+    Perform hybrid search combining vector and lexical search with query expansion.
     
     Args:
         question: Search query
@@ -77,14 +177,16 @@ def hybrid_search(question: str, repo_id: str, k: int = 12) -> List[Dict]:
     Returns:
         List of deduplicated and ranked chunks
     """
-    # Vector search (semantic)
+    # Vector search (semantic) - uses original question for semantic understanding
     vector_results = vector_search(question, repo_id, k=k)
     
-    # Lexical search (keywords)
-    keywords = extract_keywords(question)
+    # Lexical search (keywords) - uses expanded keywords for better coverage
+    keywords = extract_keywords(question, expand=True)
     lexical_results = []
     
-    for keyword in keywords[:3]:  # Use top 3 keywords
+    # Use top 4 keywords (increased from 3 to leverage expansions)
+    # Prioritize original keywords first, then expansions
+    for keyword in keywords[:4]:
         results = lexical_search(keyword, repo_id, k=k//2)
         lexical_results.extend(results)
     

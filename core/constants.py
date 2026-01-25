@@ -35,6 +35,55 @@ STOP_WORDS: set = {
     'does', 'do', 'did', 'can', 'could', 'would', 'should', 'will', 'be'
 }
 
+# Query expansion synonyms for common technical terms
+QUERY_EXPANSIONS: Dict[str, List[str]] = {
+    # Authentication & Security
+    'auth': ['authentication', 'login', 'session', 'token', 'jwt', 'oauth', 'credential'],
+    'authentication': ['auth', 'login', 'session', 'token', 'jwt', 'oauth', 'credential'],
+    'login': ['authentication', 'auth', 'session', 'credential', 'signin'],
+    'session': ['authentication', 'auth', 'login', 'token', 'cookie'],
+    'token': ['jwt', 'authentication', 'auth', 'session', 'bearer'],
+    
+    # Database & Storage
+    'database': ['db', 'datastore', 'storage', 'persistence', 'repository'],
+    'db': ['database', 'datastore', 'storage', 'persistence'],
+    'query': ['search', 'filter', 'select', 'find', 'retrieve'],
+    'storage': ['database', 'db', 'persistence', 'cache'],
+    
+    # API & HTTP
+    'api': ['endpoint', 'route', 'handler', 'controller', 'service'],
+    'endpoint': ['api', 'route', 'handler', 'controller'],
+    'route': ['endpoint', 'api', 'handler', 'path', 'url'],
+    'request': ['http', 'api', 'endpoint', 'call'],
+    'response': ['return', 'output', 'result', 'reply'],
+    
+    # Error Handling
+    'error': ['exception', 'failure', 'issue', 'problem', 'bug'],
+    'exception': ['error', 'failure', 'throw', 'catch'],
+    'validation': ['validate', 'check', 'verify', 'sanitize'],
+    
+    # Configuration & Setup
+    'config': ['configuration', 'settings', 'options', 'parameters'],
+    'setup': ['initialize', 'configure', 'install', 'bootstrap'],
+    'init': ['initialize', 'setup', 'bootstrap', 'start'],
+    
+    # Data Processing
+    'process': ['handle', 'execute', 'run', 'perform', 'do'],
+    'handle': ['process', 'manage', 'deal', 'execute'],
+    'transform': ['convert', 'change', 'modify', 'map'],
+    
+    # Testing
+    'test': ['testing', 'spec', 'unit', 'integration', 'assert'],
+    'testing': ['test', 'spec', 'unit', 'integration'],
+    
+    # Common patterns
+    'middleware': ['interceptor', 'filter', 'handler', 'processor'],
+    'service': ['api', 'handler', 'controller', 'manager'],
+    'model': ['schema', 'entity', 'data', 'structure'],
+    'view': ['template', 'render', 'display', 'ui'],
+    'controller': ['handler', 'endpoint', 'route', 'service'],
+}
+
 # File patterns to ignore
 IGNORED_PATTERNS: List[str] = [
     '.git', '__pycache__', 'node_modules', 'venv', '.env', '.DS_Store'
