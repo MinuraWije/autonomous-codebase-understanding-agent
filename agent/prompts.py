@@ -3,37 +3,58 @@ import json
 
 
 def get_planner_prompt(question: str) -> str:
-    """Get the planner prompt."""
+    """Get the planner prompt with few-shot examples."""
     return f"""You are a code analyst planning how to answer a question about a codebase.
 
 Question: {question}
 
-Your task is to create a search plan. Output a JSON object with:
-- "reasoning": Brief explanation of your approach
-- "search_queries": List of 2-4 specific search queries to find relevant code
-- "expected_files": List of file patterns you expect to find (e.g., "auth.py", "middleware")
+Your task is to create a search plan. Follow these steps:
+1. Analyze what the question is asking for
+2. Identify key concepts, functions, or patterns to search for
+3. Create 2-4 diverse, specific search queries
+4. Predict which files might contain the answer
 
-Make queries specific and diverse. Good examples:
-- "authentication middleware setup"
-- "request validation logic"
-- "database connection initialization"
-- "user login endpoint implementation"
+OUTPUT FORMAT: Output ONLY valid JSON with these fields:
+- "reasoning": Brief explanation (1-2 sentences) of your approach
+- "search_queries": List of 2-4 specific search queries
+- "expected_files": List of file patterns you expect to find
 
-Bad examples (too vague):
-- "authentication"
-- "code"
-- "function"
+EXAMPLES:
 
-Output ONLY valid JSON, no other text:
+Example 1 - Good:
+Question: "Where is user authentication handled?"
 {{
-  "reasoning": "your reasoning here",
-  "search_queries": ["query1", "query2", "query3"],
-  "expected_files": ["file1.py", "file2.js"]
-}}"""
+  "reasoning": "Need to find authentication logic, likely in middleware, auth service, or login handlers",
+  "search_queries": ["authentication middleware implementation", "user login handler", "JWT token validation", "session management setup"],
+  "expected_files": ["auth.py", "middleware.py", "login.py", "security.py"]
+}}
+
+Example 2 - Good:
+Question: "How does the API handle error responses?"
+{{
+  "reasoning": "Looking for error handling in API routes, exception handlers, and response formatting",
+  "search_queries": ["API error handler implementation", "exception response formatting", "HTTP error status codes", "error middleware"],
+  "expected_files": ["api.py", "errors.py", "middleware.py", "handlers.py"]
+}}
+
+Example 3 - Bad (too vague):
+{{
+  "reasoning": "Find code",
+  "search_queries": ["authentication", "code", "function"],
+  "expected_files": []
+}}
+
+GUIDELINES:
+- Make queries specific: include action words (handle, validate, process) and context
+- Use diverse angles: search for the same concept from different perspectives
+- Think about where code lives: main files, services, utilities, middleware
+- Avoid single-word queries or generic terms
+
+Now create a plan for the question above. Output ONLY valid JSON, no other text:"""
 
 
 def get_synthesizer_prompt(question: str, chunks: list) -> str:
-    """Get the synthesizer prompt."""
+    """Get the synthesizer prompt with few-shot examples."""
     
     # Format chunks with citations
     chunks_text = ""
@@ -49,33 +70,55 @@ def get_synthesizer_prompt(question: str, chunks: list) -> str:
             chunks_text += f" (Symbol: {symbol})"
         chunks_text += f" ---\n{text}\n"
     
-    return f"""Answer the question using ONLY the provided code chunks below.
+    return f"""You are a code analyst answering questions about a codebase. Answer using ONLY the provided code chunks.
 
 Question: {question}
 
 Retrieved Code:
 {chunks_text}
 
+INSTRUCTIONS:
+1. Read all code chunks carefully
+2. Identify which chunks are relevant to the question
+3. Synthesize an answer that directly addresses the question
+4. Structure your answer: brief summary, then detailed explanation with citations
+5. Cite EVERY claim immediately after making it using [file_path:start_line-end_line]
+
+CITATION FORMAT:
+- Use [file_path:start_line-end_line] format
+- Example: [src/auth/middleware.py:45-67]
+- For single lines: [src/auth/middleware.py:45]
+- Cite immediately after each claim or code reference
+
+EXAMPLE GOOD ANSWER:
+
+Question: "Where is authentication handled?"
+
+Answer:
+Authentication is handled in two main locations:
+
+1. The authentication middleware is defined in [src/middleware/auth.py:12-45]. This middleware extracts the JWT token from the Authorization header and validates it using the verify_token function.
+
+2. Token verification occurs in [src/services/auth_service.py:23-56], where the verify_token function decodes the JWT and checks its signature against the SECRET_KEY configured in [src/config/settings.py:18].
+
+The middleware is registered in the main application at [src/app.py:67-70], which applies it to all routes except those in the public routes list.
+
+EXAMPLE BAD ANSWER (DO NOT DO THIS):
+
+Authentication is handled in the auth middleware. The code validates tokens and checks permissions. [Some citation that doesn't match the chunks]
+
 CRITICAL RULES:
-1. Cite EVERY claim with [file_path:start_line-end_line] format
-2. Only make claims supported by the retrieved code
-3. If information is not in the chunks, say "Not found in retrieved code"
-4. Be specific about file paths and line numbers
-5. Do not make assumptions about code you haven't seen
-6. You MUST include citations for every code snippet or claim you make
+1. ONLY use information from the chunks above - do not make assumptions
+2. Cite EVERY claim with exact file paths and line numbers from chunk headers
+3. If information is missing, say "Not found in retrieved code" rather than guessing
+4. Be specific: mention function names, class names, and exact locations
+5. Structure: Start with a direct answer, then provide supporting details with citations
 
-Example citation formats:
-- [src/auth/middleware.py:45-67] (preferred)
-- [src/auth/middleware.py:45] (single line)
-- Always cite immediately after mentioning code or making a claim
-
-IMPORTANT: If you reference code from the chunks above, you MUST cite it using the exact file path and line numbers shown in the chunk headers (e.g., "Chunk 1: file_path:start_line-end_line").
-
-Answer:"""
+Now answer the question above. Use the exact file paths and line numbers from the chunk headers:"""
 
 
 def get_verifier_prompt(question: str, draft_answer: str, chunks: list) -> str:
-    """Get the verifier prompt."""
+    """Get the verifier prompt with structured instructions."""
     
     # Format chunks for verification
     chunks_summary = []
@@ -89,7 +132,7 @@ def get_verifier_prompt(question: str, draft_answer: str, chunks: list) -> str:
     
     chunks_text = '\n'.join(chunks_summary)
     
-    return f"""Verify if the answer is fully supported by the retrieved code chunks.
+    return f"""You are a code verification expert. Verify if the answer is fully grounded in the provided code chunks.
 
 Question: {question}
 
@@ -99,23 +142,61 @@ Answer to verify:
 Retrieved Code Chunks:
 {chunks_text}
 
-For each claim in the answer:
-1. Is it supported by a code chunk?
-2. Does the citation match actual content?
-3. Are there unsupported claims or hallucinations?
+VERIFICATION PROCESS:
+1. Extract all claims from the answer (each statement that makes an assertion)
+2. For each claim, check if it's supported by a code chunk
+3. Verify citations match actual chunk content at those line numbers
+4. Identify any unsupported claims or hallucinations
+5. Determine if additional information is needed to fully answer the question
 
-Output ONLY valid JSON:
+CHECKLIST:
+- [ ] Every claim has a citation
+- [ ] Citations reference actual chunks (file paths and line numbers match)
+- [ ] No claims about code not in the chunks
+- [ ] Citations point to relevant code (not just any code)
+- [ ] Answer directly addresses the question
+
+OUTPUT FORMAT: Output ONLY valid JSON:
 {{
   "is_grounded": true or false,
-  "unsupported_claims": ["claim1", "claim2"],
-  "missing_information": ["what additional info would help answer better"],
-  "follow_up_queries": ["specific query 1", "specific query 2"]
+  "unsupported_claims": ["exact claim text that's not supported", "another unsupported claim"],
+  "missing_information": ["specific information needed", "what would help answer better"],
+  "follow_up_queries": ["specific search query 1", "specific search query 2"]
 }}
 
-If the answer is well-supported, set is_grounded to true and leave the lists empty.
-If there are gaps, provide specific follow-up queries to fill them.
+EXAMPLES:
 
-Output ONLY valid JSON, no other text:"""
+Example 1 - Well-grounded answer:
+{{
+  "is_grounded": true,
+  "unsupported_claims": [],
+  "missing_information": [],
+  "follow_up_queries": []
+}}
+
+Example 2 - Answer with gaps:
+{{
+  "is_grounded": false,
+  "unsupported_claims": ["Claims middleware is registered in app.py but no chunk shows this"],
+  "missing_information": ["How the middleware is registered", "What routes are excluded from auth"],
+  "follow_up_queries": ["middleware registration in app.py", "public routes configuration"]
+}}
+
+Example 3 - Citation mismatch:
+{{
+  "is_grounded": false,
+  "unsupported_claims": ["Citation [auth.py:45-67] claims to show login function but chunk shows validate_token"],
+  "missing_information": ["Actual login function implementation"],
+  "follow_up_queries": ["user login function implementation", "login endpoint handler"]
+}}
+
+GUIDELINES:
+- Be strict: if a claim can't be verified in chunks, mark it as unsupported
+- Be specific: quote exact claim text that's problematic
+- Generate actionable queries: follow-up queries should be specific search terms
+- If answer is well-grounded, set is_grounded to true and leave lists empty
+
+Now verify the answer above. Output ONLY valid JSON, no other text:"""
 
 
 def extract_json_from_response(response: str) -> dict:
