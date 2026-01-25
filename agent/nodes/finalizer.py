@@ -5,7 +5,7 @@ from core.citation_service import CitationService
 
 def finalizer_node(state: AgentState) -> AgentState:
     """
-    Finalize the answer with formatted citations.
+    Finalize the answer with post-processing: summary, code snippets, and formatted citations.
     
     Args:
         state: Current agent state
@@ -24,14 +24,19 @@ def finalizer_node(state: AgentState) -> AgentState:
         state['repo_id']
     )
     
-    # Format final answer with citation summary
-    reference_section = citation_service.format_citations_for_answer(
-        enhanced_citations
+    # Post-process answer with summary, code snippets, and formatted citations
+    final_answer = citation_service.post_process_answer(
+        draft_answer,
+        enhanced_citations,
+        include_summary=True,
+        include_code_snippets=True
     )
-    final_answer = draft_answer + reference_section
     
     reasoning_trace = state.get('reasoning_trace', [])
-    reasoning_trace.append("Finalized answer with enhanced citations")
+    reasoning_trace.append(
+        f"Finalized answer with {len(enhanced_citations)} citations "
+        f"(summary, code snippets, and formatted references)"
+    )
     
     return {
         **state,
